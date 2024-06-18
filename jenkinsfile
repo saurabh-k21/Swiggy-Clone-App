@@ -1,71 +1,63 @@
-pipeline{
+pipeline {
     agent any
-    tools{
+    tools {
         jdk 'jdk17'
-        nodejs 'node16'
+        nodejs 'nodejs16'
     }
     environment {
         SCANNER_HOME=tool 'sonar-scanner'
     }
     stages {
-        stage('clean workspace'){
-            steps{
-                cleanWs()
-            }
-        }
-        stage('Checkout from Git'){
-            steps{
+        stage('git checkout') {
+            steps {
                 git branch: 'main', url: 'https://github.com/epic-croswords/Swiggy-Clone-App-eks-argocd.git'
             }
         }
-        stage("Sonarqube Analysis "){
-            steps{
-                withSonarQubeEnv('sonar-server') {
+        stage('sonarqube') {
+            steps {
+                withSonarQubeEnv('sonar') {
                     sh ''' $SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=Swiggy-CICD \
                     -Dsonar.projectKey=Swiggy-CICD '''
-                }
+                    }
             }
         }
-        stage("quality gate"){
-           steps {
-                script {
-                    waitForQualityGate abortPipeline: false, credentialsId: 'Sonar-token' 
+        stage('quality gates') {
+            steps {
+                script{
+                    waitForQualityGate abortPipeline: false, credentialsId: 'sonar-token'
                 }
-            } 
         }
-        stage('Install Dependencies') {
+    }
+    stage('dependancy') {
             steps {
                 sh "npm install"
-            }
         }
-        stage('OWASP FS SCAN') {
+    }
+    stage('OWASP') {
             steps {
-                dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit', odcInstallation: 'DP-Check'
-                dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
-            }
+              dependencyCheck additionalArguments: '--scan ./  --disableYarnAudit --disableNodeAudit', odcInstallation: 'DC'
+              dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
         }
-        stage('TRIVY FS SCAN') {
+    }
+    stage('trivy fs scan') {
             steps {
-                sh "trivy fs . > trivyfs.txt"
-            }
+                sh "trivy fs . > trivy-fs.txt"
         }
-        stage("Docker Build & Push"){
-            steps{
-                script{
-                   withDockerRegistry(credentialsId: 'dockerhub', toolName: 'docker'){ 
-                    app.push("${env.BUILD_NUMBER}")  
-                       sh "docker build -t swiggy-app ."
-                       sh "docker tag swiggy-app shreedhar4037/swiggy-app:latest "
-                       sh "docker push shreedhar4037/swiggy-app:latest "
-                    }
+    }
+    stage('docker build & docker push') {
+            steps {
+                withDockerRegistry(credentialsId: 'docker-cred', toolName: 'docker') {
+                sh ''' docker build swiggy-app .  \
+                docker tag swiggy-app manlineroot12/swiggy-app:latest \
+                docker push manlineroot12/swiggy-app:latest '''
                 }
-            }
         }
-        stage("TRIVY"){
-            steps{
-                sh "trivy image shreedhar4037/swiggy-app:latest > trivyimage.txt" 
-            }
+    }
+    stage('trivy image scan') {
+            steps {
+                sh "trivy image manlineroot12/swiggy-app:latest > trivy-img.txt"
         }
-        
-    } 
+    }
 }
+}
+
