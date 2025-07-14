@@ -163,6 +163,6 @@ plugins:
 3. nodejs
 4. stagebuild.
 5. Docker.
-6. owasp dependency check.
+6. owasp dependency check...
 
 
