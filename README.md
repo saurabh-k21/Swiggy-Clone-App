@@ -55,60 +55,81 @@ pipeline {
                 git branch: 'main', url: 'https://github.com/tusuii/Swiggy-Clone-App-eks-argocd.git'
             }
         }
+
         stage('sonarqube') {
             steps {
                 withSonarQubeEnv('sonar') {
-                    sh ''' $SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=sonar-token \
-                    -Dsonar.projectKey=sonar-token '''
-                    }
+                    sh '''
+                    $SCANNER_HOME/bin/sonar-scanner \
+                        -Dsonar.projectName=sonar-token \
+                        -Dsonar.projectKey=sonar-token
+                    '''
+                }
             }
         }
+
         stage('quality gates') {
             when {
                 expression { return !params.SKIP_SCANS }
             }
             steps {
-                script{
+                script {
                     waitForQualityGate abortPipeline: false, credentialsId: 'sonar-token'
                 }
+            }
         }
-    }
-    stage('npm dependancy') {
+
+        stage('npm dependency') {
             steps {
                 sh "npm install"
+            }
         }
-    }
-    stage('OWASP') {
-        when {
+
+        stage('OWASP') {
+            when {
                 expression { return !params.SKIP_SCANS }
             }
             steps {
-              dependencyCheck additionalArguments: '--scan ./  --disableYarnAudit --disableNodeAudit', odcInstallation: 'DC'
-              dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
+                dependencyCheck additionalArguments: '--scan ./  --disableYarnAudit --disableNodeAudit', odcInstallation: 'DC'
+                dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
+            }
         }
-    }
-    stage('trivy fs scan') {
+
+        stage('trivy fs scan') {
             steps {
                 sh "trivy fs . > trivy-fs.txt"
+            }
         }
-    }
-    stage('docker build & docker push') {
+
+        stage('docker build & docker push') {
             steps {
                 withDockerRegistry(credentialsId: 'docker-cred', url: 'https://index.docker.io/v1/') {
-                sh 'docker build -t subkamble/swiggy-app:latest . && docker push subkamble/swiggy-app:latest'
-                
+                    sh 'docker build -t subkamble/swiggy-app:latest .'
+                    sh 'docker push subkamble/swiggy-app:latest'
                 }
+            }
         }
-    }
-    stage('trivy image scan') {
+
+        stage('trivy image scan') {
             steps {
                 sh "trivy image subkamble/swiggy-app:latest > trivy-img.json"
+            }
         }
-    }
-    stage('Pull Docker Image') {
+
+        stage('Cleanup old Docker container') {
             steps {
                 script {
-                    // Pull the Docker image from Docker Hub
+                    sh '''
+                    docker rm -f swiggy-app || true
+                    docker rmi subkamble/swiggy-app:latest || true
+                    '''
+                }
+            }
+        }
+
+        stage('Pull Docker Image') {
+            steps {
+                script {
                     sh 'docker pull subkamble/swiggy-app:latest'
                 }
             }
@@ -117,7 +138,6 @@ pipeline {
         stage('Run Docker Container') {
             steps {
                 script {
-                    // Run the container in detached mode
                     sh 'docker run -d --name swiggy-app -p 3000:3000 subkamble/swiggy-app:latest'
                 }
             }
@@ -125,12 +145,10 @@ pipeline {
 
         stage('Show Running Containers') {
             steps {
-                script {
-                    sh 'docker ps'
-                }
+                sh 'docker ps'
             }
         }
-}
+    }
 }
 
 ```
