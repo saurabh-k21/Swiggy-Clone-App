@@ -152,7 +152,10 @@ pipeline {
 }
 
 ```
-
+``` bash
+Asia/Kolkata
+* * * * *
+```
 
 plugins:
 1. eclipse.
